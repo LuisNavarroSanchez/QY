@@ -1,15 +1,16 @@
 # QY
 
-The QY program has been developed to provide users a detailed analysis of important mapping parameters.
+The QY program has been developed to provide users a detailed analysis of mapping parameters.
+
+It is useful for the analysis of next-generation sequencing experiments with bacterial DNA.
 
 For each sample, number of (un)mapped reads, coverage, depth, quality (per read and per position), number of mismatches (per read and per position) and variants will be detailed.
 
 
 ---
 ### Input:
-The QY program works with any type of file provided by the mapping tools as long as it has SAM format.
 
-- Files containing mapping information (DNA). 
+- Files containing mapping information (SAM format). 
 It is necessary that all the files to be analyzed end in .sam and are located in the same directory.
 
 - In that directory, a file with the reference sequence (FASTA format) must be present. It is recommended to have it indexed.
@@ -17,7 +18,6 @@ It is necessary that all the files to be analyzed end in .sam and are located in
 
 
 ### Output:
-All the files will be saved in a folder named 'results'.
 
 - For each sample, an individual html report as well as 4 different csv files.
 
@@ -25,7 +25,7 @@ All the files will be saved in a folder named 'results'.
 
 - The information about depth, quality and number of mismatches per position can be visualized by launching a shiny app.
 
-
+All the files will be saved in a folder named 'results'.
 
 ### Requirements:
 - R, Rstudio (libraries knitr, ggplot2, egg, plotly and shiny).
