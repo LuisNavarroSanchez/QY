@@ -1,0 +1,5 @@
+library(knitr)
+library(ggplot2)
+library(egg)
+library(plotly)
+library(shiny)

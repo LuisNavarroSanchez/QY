@@ -1,0 +1,86 @@
+---
+title: 'Overall report'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE)
+#the code and the warnings do not appear in the report 
+```
+
+```{r message = FALSE}
+#loading of the libraries
+library(knitr)
+library(plotly)
+```
+
+```{r}
+referencename = read.table('referencename', stringsAsFactors = FALSE)
+message('Reference name: ',paste(referencename, collapse = ' '))
+referencelength = as.numeric(read.table('referencelength'))
+message('Reference length (bp): ',referencelength)
+#the heading of the report  shows the reference name and its length
+```
+
+<font size=4pt; color='green'>First, an overview of all the samples analysed:</font>
+
+```{r}
+#the file with all the information is read and presented in some tables
+#check.names = FALSE is used to keep the original colnames  
+#colClasses to indicate that the elements on the first column are characters
+summary = read.csv('Summary_allsamples.csv', header = TRUE, check.names = FALSE, colClasses = c('character', rep (NA, 36)))
+summary1 = summary[,c(1:9)]
+summary2 = summary[,c(1,10:21)]
+summary3 = summary[,c(1,22:29)]
+summary4 = summary[,c(1,30:37)]
+
+kable(summary1, align = 'c')
+kable(summary2, align = 'c')
+kable(summary3, align = 'c')
+kable(summary4, align = 'c')
+```
+
+<font size=4pt; color='blue'>And second, some interactive graphs representing important mapping parameters:</font>
+
+```{r}
+#some parameters (shown in the previous tables) are represented
+message('Use the options "Show closest data on hover" or "Compare data on hover" on the graphs to see the values')
+
+figure1 = plot_ly(summary1, y = ~`mapped reads (%)`, x = ~name, color = ~`mapped reads (%)`, type = 'scatter', mode = 'markers', text = ~paste("%: ", `mapped reads (%)`, "\nsample: ", `name`))
+figure1 = figure1 %>% layout(title = "Mapped reads (%) per sample",
+         yaxis = list (title = "percentage"), xaxis = list (title = "samples", showticklabels = FALSE), showlegend = FALSE)
+figure1
+figure2 = plot_ly(summary1, y = ~`unmapped reads (%)`, x = ~name, color = ~`unmapped reads (%)`, type = 'scatter', mode = 'markers', text = ~paste("%: ", `unmapped reads (%)`, "\nsample: ", `name`))
+figure2 = figure2 %>% layout(title = "Unmapped reads (%) per sample",
+         yaxis = list (title = "percentage"), xaxis = list (title = "samples", showticklabels = FALSE), showlegend = FALSE)
+figure2
+
+#the graph of the depth distribution is created from the information previously saved
+#colClasses to indicate that the elements on the third column are characters
+graph = read.csv('Freqdepthoverall.csv', header = TRUE, colClasses = c(rep (NA, 2),'character'))
+figure3 = plot_ly(graph, x = ~depth, y = ~percentage, color = ~name, type = 'scatter', mode = 'lines',
+       line = list(width = 3))
+figure3 = figure3 %>% layout(title = "Frequency (%) of each depth (only in the range mean +- 2sd)",
+        xaxis = list(title = "depth"), yaxis = list (title = "frequency (%)"), showlegend = FALSE)
+figure3
+
+figure4 = plot_ly(summary2, y = ~`coverage depth 0 (%)`, x = ~name, color = ~`coverage depth 0 (%)`, type = 'scatter', mode = 'markers', text = ~paste("%: ", `coverage depth 0 (%)`, "\nsample: ", `name`))
+figure4 = figure4 %>% layout(title = "Coverage depth 0 (%) per sample",
+         yaxis = list (title = "coverage"), xaxis = list (title = "samples", showticklabels = FALSE), showlegend = FALSE)
+figure4
+
+figure5 = plot_ly(summary3, y = ~`% reads MAPping quality >= 30`, x = ~name, color = ~`% reads MAPping quality >= 30`, type = 'scatter', mode = 'markers', text = ~paste("%: ", `% reads MAPping quality >= 30`, "\nsample: ", `name`))
+figure5 = figure5 %>% layout(title = "% reads MAPping quality >= 30",
+         yaxis = list (title = "percentage"), xaxis = list (title = "samples", showticklabels = FALSE), showlegend = FALSE)
+figure5
+summary3[,5] = round((summary3[,5]), digits = 3)
+figure6 = plot_ly(summary3, y = ~`reads with 0 mismatches (%)`, x = ~name, color = ~`reads with 0 mismatches (%)`, type = 'scatter', mode = 'markers', text = ~paste("%: ", `reads with 0 mismatches (%)`, "\nsample: ", `name`))
+figure6 = figure6 %>% layout(title = "Reads with 0 mismatches (%)",
+         yaxis = list (title = "percentage"), xaxis = list (title = "samples", showticklabels = FALSE), showlegend = FALSE)
+figure6
+
+figure7 = plot_ly(summary4, y = ~`number of variants`, x = ~name, color = ~`number of variants`, type = 'bar', text = ~paste("n: ", `number of variants`, "\nsample: ", `name`))
+figure7 = figure7 %>% layout(title = "Number of variants",
+         yaxis = list (title = "number"), xaxis = list (title = "samples", showticklabels = FALSE), showlegend = FALSE)
+figure7
+```
+
