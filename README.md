@@ -11,7 +11,7 @@ For each sample, number of (un)mapped reads, coverage, depth, quality (per read 
 ### Input:
 
 - Files containing mapping information (SAM format; header mandatory). 
-It is necessary that the names of all the files to be analyzed end in .sam and are located in the same directory.
+It is necessary that all the files to be analyzed are located in the same directory and have names ending in .sam.
 
 - In that directory, a file with the reference sequence (FASTA format) must be present. It is recommended to have it indexed.
 
