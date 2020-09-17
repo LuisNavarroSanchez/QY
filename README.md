@@ -36,6 +36,7 @@ All the files will be saved in a folder named 'results'.
 
 ### Installation:
 Download the folder containing all the scripts. Locate on it in the terminal and launch main.sh (sh main.sh -h, for usage details).
+Remember to check that you have execution permission on delete.sh, files.sh, main.sh, move.sh and shiny.sh before launching the program.
 
 
 
