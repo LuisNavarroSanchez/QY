@@ -4,7 +4,7 @@ usage () {	echo "How to use the QY program
 		Example: sh main.sh -p /home/luisns/Desktop/test -f chrom.fasta -D Y -d 5 -o -i -e '%QUAL>=25' 
 		
 		-h,	prints this help
-		-p,	path to the files (absolute preferred although relative also accepted)
+		-p,	path to the files (absolute prefered although relative also accepted)
 		-f,	FASTA file with the reference sequence (sequence data in one single line)
 		-D,	deletion of the files created (except .bam, .sorted and .sorted.bai) [Y/n]
 		-d,	up to this value (included), depth will also be considered 0 [integer]
