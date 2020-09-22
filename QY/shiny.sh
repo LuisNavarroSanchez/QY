@@ -4,7 +4,7 @@ usage () {	echo "How to launch a shiny app for a specific sample.
 		Example: sh shiny.sh -p /home/luisns/Desktop/test/results -s 022 
 		
 		-h,	prints this help
-		-p,	path to the files (absolute preferred although relative also accepted)
+		-p,	path to the files (absolute prefered although relative also accepted)
 		-s,	sample name (the part before .depthquality.csv)
 		* -p, -s are mandatory parameters
 
