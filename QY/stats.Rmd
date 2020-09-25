@@ -140,7 +140,7 @@ kable(coverage, align = 'c')
 positions_without = depth[depth[,2]==0,]
 
 if (is.na(positions_without[1,1])){
-  message('For this sample, no positions have depth = 0.')
+  message('For this sample, no positions have depth = 0:')
   regions = matrix(c(0,0,0), ncol = 3)
   colnames(regions) = c("beginning","end","region size")
   info_depth0 = matrix(c(0,0,0,0,0), ncol = 5)
