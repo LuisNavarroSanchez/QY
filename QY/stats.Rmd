@@ -1,0 +1,528 @@
+---
+title: 'Report'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE)
+#the code and the warnings do not appear in the report 
+```
+
+```{r}
+message('Sample ',names[i,1])
+referencename = read.table('referencename', stringsAsFactors = FALSE)
+message('Reference name: ',paste(referencename, collapse = ' '))
+referencelength = as.numeric(read.table('referencelength'))
+message('Reference length (bp): ',referencelength)
+#the heading of the report shows this information: name of the sample and reference used
+#the length of the reference is also used in the subsequent analysis
+```
+
+```{r message = FALSE}
+#loading of the libraries
+library(knitr)
+library(ggplot2)
+library(egg)
+```
+
+<font size=4pt; color='green'>First, some details about the reads:</font>
+  
+```{r}
+#the name of the file of interest is created
+nam = paste(names[i,1],'.stats',sep = '')
+#there are fields without information -the fill option allows to solve that- and mix of strings and numbers 
+#no factors are needed, therefore the stringsAsFactors option is used
+stats = read.table(nam, fill = TRUE, stringsAsFactors = FALSE)
+#the values are selected and incorporated to a matrix 
+stats_summary = matrix(c(as.numeric(stats[1,4])+as.numeric(stats[50,1]),stats[2,3],as.numeric(stats[1,4])+as.numeric(stats[50,1])-as.numeric(stats[2,3]),as.numeric(stats[7,3])+as.numeric(stats[50,1]),round((as.numeric(stats[7,3])+as.numeric(stats[50,1]))/(as.numeric(stats[1,4])+as.numeric(stats[50,1])-as.numeric(stats[2,3]))*100, digits = 2),stats[10,3],round((as.numeric(stats[10,3])/(as.numeric(stats[1,4])+as.numeric(stats[50,1])-as.numeric(stats[2,3])))*100, digits = 2),round(as.numeric(stats[27,3]), digits = 4)), ncol = 8)
+colnames(stats_summary) = c("raw total sequences","filtered","total sequences","mapped reads (n)","mapped reads (%)","unmapped reads (n)","unmapped reads (%)","error rate")
+kable(stats_summary, align = 'c')
+message('Error rate = mismatches / bases mapped (cigar)')
+```
+
+<font size=4pt; color='blue'>Second, the depth:</font>
+
+```{r}
+#the name of the file of interest is created
+nam = paste(names[i,1],'.depth',sep = '')
+#the file already has a header, and two columns: position and depth
+#it is transformed into a matrix
+depth = read.table(nam, header = TRUE)
+depth = as.matrix(depth)
+
+#mean and standard deviation of the depth are calculated
+man = mean(depth[,2])
+deviation = sd(depth[,2])
+depth_summary = matrix(c(round(man, digits = 2),round(deviation, digits = 2),median(depth[,2]),min(depth[,2]),max(depth[,2])), ncol = 5)
+colnames(depth_summary) = c("mean depth","standard deviation depth","median depth","minimum depth","maximum depth")
+kable(depth_summary, align = 'c')
+
+#besides the depth values for all the positions, a new column is added to the matrix
+#that column includes the values of the deviation
+#the different ranges of deviation are defined by the mean depth value +- a certain number of standard deviations (sd)
+#1, 2, 3 or more (represented by the number 4) sd are considered
+#those numbers (1 to 4) are the tags included in the new column
+deviationsd = c(0)
+depth = cbind(depth,deviationsd)
+for (a in 1:referencelength){
+  if ((man-deviation <= depth[a,2])&(depth[a,2] <= man+deviation)){
+    depth[a,3] = 1
+  }
+  else{
+    if ((man-2*deviation <= depth[a,2])&(depth[a,2] <= man+2*deviation)){
+      depth[a,3] = 2
+    }
+    else{
+      if ((man-3*deviation <= depth[a,2])&(depth[a,2] <= man+3*deviation)){
+        depth[a,3] = 3
+      }
+      else{
+        depth[a,3] = 4
+      }
+    }
+  }
+}
+
+#for each of the deviation tags, i.e., from 1 to 4 sd +- the mean depth, a summary table is prepared
+#it includes, the tag value, the number of positions with a depth value in that range
+#the percentage of the genome represented, the minimum of the range, and the maximum of the range
+depth = as.data.frame(depth)
+deviationsd = table(depth[,3])
+deviationsd = as.data.frame(deviationsd)
+minims = c(min(depth[which(depth$deviationsd==1),2]),min(depth[which(depth$deviationsd==2),2]),min(depth[which(depth$deviationsd==3),2]),min(depth[which(depth$deviationsd==4),2]))
+maxims = c(max(depth[which(depth$deviationsd==1),2]),max(depth[which(depth$deviationsd==2),2]),max(depth[which(depth$deviationsd==3),2]),max(depth[which(depth$deviationsd==4),2]))
+deviationsd = cbind(deviationsd,round((deviationsd[,2]/referencelength)*100,digits=2), minims, maxims)
+colnames(deviationsd) = c("deviations","number of positions","percentage of the genome","minimum depth","maximum depth")
+message('The depth is distributed along the genome (considering the mean value +- 1 to 4 sd):')
+kable(deviationsd, align = 'c')
+#and another table too, but only for the depth range established by the user (from 0 to a certain value)
+positions = length(depth[which(depth$depth<=thresholdepth),2])
+deviationsd_user = matrix(c(positions,round((positions/referencelength)*100,digits=2),0,thresholdepth), ncol = 4)
+colnames(deviationsd_user) = c("number of positions","percentage of the genome","minimum depth","maximum depth")
+message('And specifically in the range from depth = 0 to depth = ',thresholdepth,':')
+kable(deviationsd_user, align = 'c')
+
+#only the positions with the highest deviations of depth values are represented (3 or more standard deviations from the mean)
+message('Depth vs Position representation.\nOnly for the values with the highest standard deviations, i.e. 3 and 4, and from 0 to ',thresholdepth,'.')
+depth_34 = ggplot(depth[which(depth$deviationsd > 2),], aes(x = position, y = depth, color = as.character(deviationsd))) +
+geom_point(alpha = 0.1, size = 0.3) + labs(subtitle = "Depth vs Position", y = "Depth", colour = 'deviations') + theme(axis.title.x = element_blank(), axis.text.x = element_blank(), legend.position = "top", legend.key.size = unit(0.5,"cm"))
+#in addition, a graph only for the positions with depth value between 0 and 
+#an integer defined by the user (thresholdepth), is created
+depthuser = depth[depth$depth <= thresholdepth,]
+depth_user = ggplot(depthuser, aes(x = position, y = depth, color = as.character(deviationsd))) + theme(legend.position = "none", axis.title.y = element_blank()) + geom_point(alpha = 0.1, size = 0.3) + labs(x = "Position") + xlim(1,referencelength)
+ggarrange(depth_34,depth_user, ncol = 1, heights = c(8, 1.5))
+
+#a summary table, with the frequency of each depth is prepared (depth value on column 2)
+#this table includes the depth value, the number of positions with it, 
+#and the percentage from the overall (=reference length)
+freqdepth = table(depth[,2])
+freqdepth = as.data.frame(freqdepth)
+freqdepth = cbind(freqdepth,round((freqdepth[,2]/referencelength)*100,digits=4))
+colnames(freqdepth) = c("depth","frequency","percentage")
+freqdepth[,1] = as.numeric(levels(freqdepth$depth))
+#only the positions in the range mean +- 2 sd, tag values 1 and 2 from deviationsd,
+#are represented (as they will include the majority of the positions)
+message('Most of the positions have a depth value in the range mean +- 2 standard deviations')
+ggplot(freqdepth[which(freqdepth$depth >= man-2*deviation & freqdepth$depth <= man+2*deviation),], aes(x = depth, y = percentage))+
+ geom_line(color = 'orange') + labs(subtitle="Frequency (%) vs Depth", y="Frequency (%)", x="Depth")
+
+#the coverage is calculated
+#considering only depth value = 0
+coverage_0 = round(((referencelength-freqdepth[which(freqdepth$depth==0),2])/referencelength)*100, digits = 2)
+#but also considering the value given by the user
+coverage_user = round(((referencelength-sum(freqdepth[which(freqdepth$depth<=thresholdepth),2]))/referencelength)*100, digits = 2)
+coverage = matrix(c(coverage_0, coverage_user), ncol = 2)
+colnames(coverage) = c("coverage depth 0 (%)", paste("coverage defined by the user: depth 0 to",thresholdepth,"(%)",sep = ' '))
+message('The coverage is:')
+kable(coverage, align = 'c')
+
+#and finally, only for the positions with depth value = 0, the regions where they are distributed, are defined
+#first, those positions with depth = 0 are selected; and only the positions
+positions_without = depth[depth[,2]==0,]
+
+if (is.na(positions_without[1,1])){
+  message('For this sample, no positions have depth = 0.')
+  regions = matrix(c(0,0,0), ncol = 3)
+  colnames(regions) = c("beginning","end","region size")
+  info_depth0 = matrix(c(0,0,0,0,0), ncol = 5)
+  colnames(info_depth0) = c("positions with depth = 0","distributed in these regions", "regions with size = 1", "maximum region size", "regions with size 500 or more")
+}else{
+  p_0 = c(positions_without[,1])
+  #the regions are established: contiguous positions not covered
+  regs = tapply(p_0, cumsum(c(TRUE, diff(p_0) > 1)), range)
+  #from that list, for each pair, that define a region, the beginning or minimum, and the end, or maximum,
+  #are copied in a vector; with both a matrix is built to calculate the length of each region 
+  #(the +1 is necessary to have the correct length)
+  minimd = c()
+  maximd = c()
+  for (k in 1:length(regs)){
+    minimd = c(minimd, min(regs[[k]]))
+    maximd = c(maximd, max(regs[[k]]))
+  }
+  regions = matrix(c(minimd,maximd),ncol = 2)
+  regions = cbind(regions,(regions[,2]-regions[,1])+1)
+  colnames(regions) = c("beginning","end","region size")
+  #all this information is summarized
+  size_regions = table(regions[,3])
+  size_regions = as.data.frame(size_regions)
+  colnames(size_regions) = c("size of the region","number of regions")
+  size_regions[,1] = as.numeric(levels(size_regions$`size of the region`))
+  info_depth0 = matrix(c(length(p_0),length(regs),size_regions[which(size_regions$`size of the region`==1),2],size_regions[length(size_regions[,1]),1],sum(size_regions[which(size_regions$`size of the region`>=500),2])), ncol = 5)
+  colnames(info_depth0) = c("positions with depth = 0","distributed in these regions", "regions with size = 1", "maximum region size", "regions with size 500 or more")
+  message('More information about the positions with depth = 0:')
+}
+
+kable(info_depth0, align = 'c')
+```
+
+```{r}
+#some information is saved; it will be used by overallstats.Rmd
+#to generate a graph with the depth frequency per sample (mean +- 2 sd)
+if (i == 1){
+  freqdepthoverall = freqdepth[freqdepth$depth >= man-2*deviation & freqdepth$depth <= man+2*deviation,c(1,3)]
+  name = names[i,1]
+  freqdepthoverall = cbind(freqdepthoverall,name)
+}
+if (i > 1) {
+  name = names[i,1]
+  freqdepthoverall = rbind(freqdepthoverall, cbind(freqdepth[freqdepth$depth >= man-2*deviation & freqdepth$depth <= man+2*deviation,c(1,3)],name))
+}
+if (i == length(names[,1])){
+  write.csv(freqdepthoverall, file = 'Freqdepthoverall.csv', col.names = TRUE, row.names = FALSE)
+}  
+```
+
+
+<font size=4pt; color='green'>Third, quality.</font>
+<font size=4pt; color='green'>Per read:</font>
+
+```{r}
+#the name of the file of interest is created
+nam = paste(names[i,1],'.qualityseq',sep = '')
+#a summary of the MAPping quality values of each mapped read is generated
+quality_read = read.table(nam)
+quality_read = table(quality_read)
+quality_read = as.data.frame(quality_read)
+#the percentage that each MAPping quality represents from the total is calculated
+quality_read = cbind(quality_read,round((quality_read[,2]/sum(quality_read[,2]))*100,digits=4))
+colnames(quality_read) = c("quality","frequency","percentage")
+quality_read[,1] = as.numeric(levels(quality_read$quality))
+message('The mapped reads with the highest MAPping quality, i.e. ',quality_read[length(quality_read[,1]),1],',\nare ',quality_read[length(quality_read[,1]),2],' and represent the ',round(quality_read[length(quality_read[,1]),3], digits = 2),'%.')
+#a loop determines the minimum MAPping quality for the 95% of the mapped reads
+#the loops goes from the highest to the lowest MAPping quality (decreasing value of k)
+#adding the percentages -3rd column-; once the 95% is overpassed, the loops stops
+for (k in length(quality_read[,1]):1){
+  if (sum(quality_read[length(quality_read[,1]):k,3]) >= 95){
+    break
+  }
+}
+#in addition, the percentage of reads with MAPping quality 30 or higher is obtained
+#both values are included in a summary table
+quality_reads = matrix(c(quality_read[k,1],round(sum(quality_read[which(quality_read$quality>=30),3]),digits = 2)), ncol = 2)
+colnames(quality_reads) = c("MAPping quality 95% reads","% reads MAPping quality >= 30")
+message('Some information about the quality of the reads:')
+kable(quality_reads, align = 'c')
+
+#the frequency of each MAPping quality, in %, not in n, is represented
+#y axis in log10 scale to improve the visualization, as the values are in a extremely wide range
+message('The frequency (%) of each MAPping quality is:')
+ggplot(quality_read, aes(x = quality, y = percentage))+
+ geom_point(size=0.6, color = 'red') + labs(subtitle="Frequency (%) vs MAPping quality", y="Frequency (%); log10 scale", x="MAPping quality") + scale_y_log10()
+```
+
+<font size=4pt; color='green'>And, per position:</font>
+
+```{r}
+#the name of the file of interest is created, read and transformed into a matrix
+nam = paste(names[i,1],'.qualitypos',sep = '')
+qualityposition = read.table(nam)
+qualityposition = as.matrix(qualityposition)
+#all the positions with depth = 0, will have a value of quality equal to 0.125893, as the symbol *,
+#that is used to indicate that there is no depth, has a Q score of 9 (ASCII 42), and that Phred score.
+#Therefore, that value is changed to 0
+qualityposition[depth$depth==0]=0
+#only for the rest of positions (with depth != 0): the minimum, maximum, mean and median
+#quality per position are calculated
+#the higher value of quality, is actually the worst (=minimum), and vice versa
+maxim = max(qualityposition[qualityposition!=0])
+minim = min(qualityposition[qualityposition!=0])
+man = round(mean(qualityposition[qualityposition!=0]), digits = 4)
+mdian = median(qualityposition[qualityposition!=0])
+#values are in Phred score for the calculations; nevertheless, for a clearer interpretation of the results,
+#they are transformed into ASCII code by using the formula: Q + 33 = -10log10(P) 
+message('The quality per position is 0 for the positions not covered.\nFor the rest, with a depth value != 0, it ranges from ',round((-10*log10(maxim))+33,digits = 1),' to ',round((-10*log10(minim))+33,digits = 1),'.\nThe mean is ',round((-10*log10(man))+33,digits = 1),' and the median is ',round((-10*log10(mdian))+33,digits = 1),'.')
+
+#once the calculations are done, all the quality values can be transformed to ASCII code
+qualityASCIIposition = round((-10*log10(qualityposition))+33,digits = 1)
+#again, quality of the positions with depth = 0 is set to 0
+qualityASCIIposition[depth$depth==0]=0
+#the positions are added
+qualitypositions = cbind(qualityASCIIposition,depth[,1])
+colnames(qualitypositions) = c('qualityASCII','position')
+qualitypositions = as.data.frame(qualitypositions)
+
+#the frequency of each quality is represented (for that purpose a summary is previously generated)
+frequalitypositions = table(qualitypositions[,1])
+frequalitypositions = as.data.frame(frequalitypositions)
+frequalitypositions = cbind(frequalitypositions,round((frequalitypositions[,2]/referencelength)*100,digits=4))
+colnames(frequalitypositions) = c("quality","frequency","percentage")
+frequalitypositions[,1] = as.numeric(levels(frequalitypositions$quality))
+#positions with depth value equal to 0 are excluded
+message('The frequency (%) of each quality is:')
+ggplot(frequalitypositions[which(frequalitypositions$quality > 0),], aes(x = quality, y = percentage))+
+ geom_point(size=0.4, color='seagreen') + labs(subtitle="Frequency (%) of each quality", y="Frequency (%)", x="Quality")
+```
+
+<font size=4pt; color='blue'>Fourth, mismatches.</font>
+<font size=4pt; color='blue'>Per read:</font>
+
+```{r}
+#the name of the file of interest is created and read
+nam = paste(names[i,1],'.mismaseq',sep = '')
+mismaread = read.table(nam)
+#a summary table is prepared
+#these values correspond to the NM field of the mapped reads
+mismaread = table(mismaread)
+mismaread = as.data.frame(mismaread)
+#the percentage that each value represents from the total is incorporated
+mismaread = cbind(mismaread,round((mismaread[,2]/sum(mismaread[,2]))*100,digits=6))
+colnames(mismaread) = c("nmismatches","frequency","percentage")
+mismaread[,1] = as.numeric(levels(mismaread$nmismatches))
+
+#a loop determines the highest number of mismatches for the 95% of the mapped reads
+#the loops goes from the lowest number and increases
+#adds the percentages -3rd column-; once the 95% is overpassed, the loops stops
+for (k in 1:nrow(mismaread)){
+  if (sum(mismaread[1:k,3]) >= 95){
+    break
+  }
+}
+mismaread_summary = matrix(c(mismaread[which(mismaread$nmismatches==0),2],round(mismaread[which(mismaread$nmismatches==0),3],digits = 6),mismaread[nrow(mismaread),1],mismaread[nrow(mismaread),2],round(mismaread[nrow(mismaread),3],digits = 6),mismaread[k,1]), ncol = 6)
+colnames(mismaread_summary) = c("reads with 0 mismatches (n)","reads with 0 mismatches (%)", "highest number of mismatches in a read", "number of those reads", "% of those reads", "95% of reads have this or less number of mismatches")
+message('Some details of the number of mismatches per read:')
+kable(mismaread_summary, align = 'c')
+
+#the frequency of each number of mismatches is represented 
+#number and not %, although with y axis in log10 scale to improve the visualization, as the values are in an extremely wide range
+message('The frequency of each number of mismatches per read, and the cumulative frequency, are:')
+num_mismaread = ggplot(mismaread, aes(x = nmismatches, y = frequency))+
+ geom_point(size=0.6, color = 'red') + labs(y="Number of reads; log10 scale", x="Number of mismatches") + scale_y_log10() 
+cumsum_mismaread = ggplot(mismaread, aes(x = nmismatches, y = cumsum(percentage))) + labs(y="Cumsum (%)", x="Number of mismatches") + geom_line(color='seagreen') + geom_point(size=0.6, col = "red") + theme(axis.title.x = element_blank(),axis.text.x=element_blank(),axis.ticks.x=element_blank())
+ggarrange(cumsum_mismaread,num_mismaread, nrow = 2)
+```
+
+<font size=4pt; color='blue'>And, per position:</font>
+
+```{r}
+#the name of the file of interest is created and read
+#fill = TRUE is necessary as not all the rows have the same fields (some positions have no discrepancies)
+#furthermore, stringsAsFactors = FALSE as we do not want to create factors
+nam = paste(names[i,1],'.mismapos',sep = '')
+mismaposition = read.table(nam, col.names = c('depth','mismatches'), fill = TRUE, stringsAsFactors = FALSE)
+#the data.frame has 2 columns: one for the depth on the position and other for the read bases that are mismatches
+#the number of mismatches per position is counted and incorporated as a new column
+numbermismatches = nchar(mismaposition[,2])
+mismaposition = cbind(mismaposition, numbermismatches)
+#the relative percentage for each position is calculated: mismatches/depth; new column added to the data.frame
+relativepercentage = round((mismaposition[,3]/mismaposition[,1]), digits = 4)
+mismaposition = cbind(mismaposition, relativepercentage)
+message('The sample has ', nrow(mismaposition[which(mismaposition$depth != 0 & mismaposition$relativepercentage > 0),]),' positions with some mismatch when compared to the reference,\nand ',nrow(mismaposition[which(mismaposition$depth != 0 & mismaposition$relativepercentage == 0),]),' positions with no mismatches.\nPositions with depth = 0 are not considered for these calculations.')
+#positions with depth = 0 are not considered
+
+position = c(1:referencelength)
+mismaposition = cbind(mismaposition,position)
+#only for the positions with depth != 0, the relative percentage is represented
+#more precisely, relative percentages in the range 0.2 to 0.8
+message('Representation, for each position, of the relative percentage (mismatches/depth)\n(positions with depth = 0 have been excluded).\nOnly the range 0.2 to 0.8 is included.')
+ggplot(mismaposition[which(mismaposition$depth!=0 & mismaposition$relativepercentage > 0.2 & mismaposition$relativepercentage < 0.8),], aes(x = position, y = relativepercentage, color = relativepercentage))+
+ geom_point(size=0.2) + labs(subtitle="Relative percentage of the number of mismatches per position", x="Position", y="Relative percentage") + ylim(0,1)
+message('There are ',nrow(mismaposition[which(mismaposition$depth!=0 & mismaposition$relativepercentage>=0.2 & mismaposition$relativepercentage<0.8),]),' positions with a relative percentage between 0.2 and 0.8.\nThat represents the ',round((nrow(mismaposition[which(mismaposition$depth!=0 & mismaposition$relativepercentage>=0.2 & mismaposition$relativepercentage<0.8),])/referencelength)*100, digits = 4),'% of the genome.')
+
+#the frequency of each relative percentage is calculated and represented, excluding positions with
+#depth = 0 as there are no reads covering that position
+#or with numbermismatches = 0 which show no variation from the expected sequence
+freqmismaposition = table(mismaposition[which(mismaposition$depth!=0 & mismaposition$numbermismatches!=0),4])
+freqmismaposition = as.data.frame(freqmismaposition)
+colnames(freqmismaposition) = c("relativepercentage","frequency")
+percentage = round((freqmismaposition[,2]/sum(freqmismaposition[,2]))*100,digits = 4)
+freqmismaposition = cbind(freqmismaposition,percentage)
+freqmismaposition[,1] = as.numeric(levels(freqmismaposition$relativepercentage))
+
+#a new column is added to the table to create the intervals: 100 from 0 to 1
+interval = c(0)
+freqmismaposition=cbind(freqmismaposition,interval)
+freqmismaposition$interval = cut(freqmismaposition$relativepercentage, breaks = c(seq(0,1, length.out = 100)))
+#for each interval, the frequencies for the different relative percentages included, are added
+sumfreq= as.data.frame(xtabs(percentage ~ interval,freqmismaposition))
+#and intervals are replaced by a number: the middle point of each interval
+sumfreq$interval = seq(from = (1/99/2), by = (1/99), length.out =  99) 
+colnames(sumfreq) = c("Relative_percentage_mismatches", "Frequency")
+message('Without considering the positions with depth = 0 or with no mismatches when compared to the reference,\nthe frequency of each relative percentage of mismatches has this distribution\n(frequencies grouped in 100 ranges):')
+#and this is represented in a graph
+ggplot(sumfreq, aes(x=Relative_percentage_mismatches, y=Frequency)) + 
+  geom_point(size=0.4, color = 'red') +  labs(title="Grouped in 100 ranges; y axis log10 scale") + scale_y_log10() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) 
+```
+
+<font size=4pt; color='green'>And fifth and last, the variants:</font>
+
+```{r}
+message('The filter applied (option + expression) to determine the variants is:')
+message(paste(filteroption," '",filterexpression,"'", sep = ''))
+#the name of the file of interest is created and read
+#again stringsAsFactors is used as there are strings and numbers in the file and no factors are needed
+nam = paste(names[i,1],'.variants',sep = '')
+variants = read.table(nam, header = TRUE, stringsAsFactors = FALSE)
+colnames(variants) = c('position','reference','alternative','quality','rawreaddepth','averagemappingquality') 
+
+if (is.na(variants[1,1])){
+  message('For this sample, no variants have been identified.\nCheck the filter applied as well as the sample characteristics.')
+  variants_summary = matrix(c(0,0,0,0,0,0,0,0), ncol = 8)
+  colnames(variants_summary) = c("number of variants", "transitions (n)", "transitions (%)", "transversions (n)", "transversions (%)", "ti/tv", "indels (n)", "indels (%)")
+  freqvariants = matrix(c(NA,0,0), ncol = 3)
+  colnames(freqvariants) = c('type','frequency','percentage')
+}else{
+  variants$quality = round(variants$quality, digits = 2)
+  #the size of the insertions and deletions (indels) is calculated
+  #reference sequence - alternative sequence (the sign determines whether it is an insertion or a deletion)
+  indel = nchar(variants$reference) - nchar(variants$alternative)
+  variants = cbind(variants,indel)
+  #the type of variant is incorporated: indel, ti -transition- or tr -transversion-
+  type = c('')
+  variants = cbind(variants,type)
+  variants[,8] = as.character(levels(variants$type))
+  for (a in 1:nrow(variants)){
+    if (variants[a,7]!=0){
+      variants[a,8] = 'indel'
+    }
+    else{
+      if (variants[a,2]=='A' & variants[a,3]=='G'){
+        variants[a,8] = 'tiAG'
+      }
+      else{
+        if (variants[a,2]=='G' & variants[a,3]=='A'){
+          variants[a,8] = 'tiGA'
+        }
+        else{
+          if (variants[a,2]=='C' & variants[a,3]=='T'){
+            variants[a,8] = 'tiCT'
+          }
+          else{
+            if (variants[a,2]=='T' & variants[a,3]=='C'){
+              variants[a,8] = 'tiTC'
+            }
+            else{
+              if (variants[a,2]=='A' & variants[a,3]=='T'){
+                variants[a,8] = 'trAT'
+              }
+              else{
+                if (variants[a,2]=='T' & variants[a,3]=='A'){
+                  variants[a,8] = 'trTA'
+                }
+                else{
+                  if (variants[a,2]=='A' & variants[a,3]=='C'){
+                    variants[a,8] = 'trAC'
+                  }
+                  else{
+                    if (variants[a,2]=='C' & variants[a,3]=='A'){
+                      variants[a,8] = 'trCA'
+                    }
+                    else{
+                      if (variants[a,2]=='C' & variants[a,3]=='G'){
+                        variants[a,8] = 'trCG'
+                      }
+                      else{
+                        if (variants[a,2]=='G' & variants[a,3]=='C'){
+                          variants[a,8] = 'trGC'
+                        }
+                        else{
+                          if (variants[a,2]=='T' & variants[a,3]=='G'){
+                            variants[a,8] = 'trTG'
+                          }
+                          else{
+                              variants[a,8] ='trGT'
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  #the quality ASCII on each position is also incorporated
+  qualityASCII = c(0)
+  variants = cbind(variants, qualityASCII)
+  b = 1
+  c = 1
+  #it is possible that there are some variants described for the same position
+  #therefore, the b is compared again with the c even after a match between them
+  while (b <= nrow(variants)){
+    if (variants[b,1] != qualitypositions[c,2]){
+      c = c + 1
+    }
+    else{
+      variants[b,9] = qualitypositions[c,1]
+      b = b + 1
+    }
+  }
+  message('Summary of the variants identified:')
+  
+  #the quality of the variants is represented
+  plot1 = ggplot(variants, aes(x = position, y = qualityASCII)) + geom_point(alpha=0.2, size=0.4, color='blue') + labs(subtitle="Quality vs Position (only for the variants)", y="Quality", x="Position") + theme(legend.position="bottom") + xlim(1,referencelength)
+  print(plot1)
+  
+  #a summary table is prepared, with the frequency and percentage from the total that each type represents
+  freqvariants = table(variants$type)
+  freqvariants = as.data.frame(freqvariants)
+  freqvariants = cbind(freqvariants,round((freqvariants[,2]/sum(freqvariants[,2]))*100, digits = 2))
+  colnames(freqvariants) = c('type','frequency','percentage')
+  
+  variants_summary = matrix(c(nrow(variants),sum(freqvariants[2:5,2]),sum(freqvariants[2:5,3]),sum(freqvariants[6:13,2]),sum(freqvariants[6:13,3]),round(sum(freqvariants[2:5,2])/sum(freqvariants[6:13,2]), digits = 2),freqvariants[1,2],freqvariants[1,3]), ncol = 8)
+  colnames(variants_summary) = c("number of variants", "transitions (n)", "transitions (%)", "transversions (n)", "transversions (%)", "ti/tv", "indels (n)", "indels (%)")
+  
+  #the size of the indels is represented too
+  #for that purpose, a summary table is creaated
+  freqvariantsindels = table(variants[which(variants$indel!=0),]$indel)
+  freqvariantsindels = as.data.frame(freqvariantsindels)
+  colnames(freqvariantsindels) = c('size','frequency')
+  plot2=ggplot(variants[which(variants$indel!=0),], aes(x = indel)) + geom_histogram(color="orange", fill="coral", binwidth = 1) + labs(subtitle="Frequency of each indel", y="Frequency (number); log10 scale", x="Indel size") + scale_y_log10()
+  
+  #a file with some information regarding the size and frequency of the indels is saved
+  write.csv(freqvariantsindels, file = paste(names[i,1],'.indelsize.csv',sep=''), col.names = TRUE, row.names = FALSE)
+}
+
+kable(variants_summary, align = 'c')
+kable(freqvariants, align = 'c')
+if (! is.na(variants[1,1])){
+  print(plot2)
+}
+```
+
+
+```{r message = FALSE}
+#some information is saved
+#one file with the depth and quality per position (useful for the shiny app)
+depthquality = data.frame(depth$position,depth$depth,qualitypositions$qualityASCII,mismaposition$relativepercentage)
+colnames(depthquality) = c('position','depth','quality','relative_percentage')
+write.csv(depthquality, file = paste(names[i,1],'.depthquality.csv',sep=''), col.names = TRUE, row.names = FALSE)
+#other with the variants
+write.csv(variants, file = paste(names[i,1],'.variants.csv',sep=''), col.names = TRUE, row.names = FALSE)
+#the third one with the information of the positions and regions not covered (depth = 0)
+write.csv(regions, file = paste(names[i,1],'.regionsdepth0.csv',sep=''), col.names = TRUE, row.names = FALSE)
+
+#an overall report is created
+if (i == 1){
+  stats_overall = cbind(name,stats_summary,depth_summary,coverage,info_depth0, quality_reads, mismaread_summary, variants_summary)
+}
+if (i > 1) {
+  stats_overall = rbind(stats_overall,cbind(matrix(c(names[i,1],stats_summary[1:8],depth_summary[1:5],coverage[1:2],info_depth0[1:5],quality_reads[1:2],mismaread_summary[1:6],variants_summary[1:8]), ncol=37)))
+}
+if (i == length(names[,1])){
+  write.csv(stats_overall, file = 'Summary_allsamples.csv', col.names = TRUE, row.names = FALSE)
+}  
+```
+
