@@ -101,8 +101,11 @@ do
   rm n2
   awk 'NF>0 {sum = 0; for (i = 1; i <= NF; i++) sum += (10^(-($i-33)/10)); sum /= NF; print sum}' n3 > $line.qualitypos 2>/dev/null
   rm n3
-#the 12th field of the file (for the mapped reads), shows how many mismatches each read has when compared to the reference
-  grep NM:i: $line.mapped 2>/dev/null | awk '{print $12}' | cut -c 6- > $line.mismaseq 
+#the field were the NM is, might not always be in the same position on the line (mapped reads file), 
+#therefore, it is necessary to find the field that has the pattern, select it and then cut to only get the number of interest
+#i.e. the number of mismatches that each read has when compared to the reference
+#the search starts on the 12th field as the first 11 are mandatory on a SAM
+  grep NM:i: $line.mapped 2>/dev/null | awk '{for(i=12;i<=NF;i++) {if ($i ~ /^NM:i:/) { print $i; break }}}' | cut -c 6- > $line.mismaseq 
 #the mpileup command is used again, but, now, taking into account the reference, to obtain the mismatches per position
 #the 4th and 5th fields are selected, depth and read bases, respectively
 #some transformations are needed to eliminate symbols not related to what matches or mismatches are and to transform indels
